@@ -2,13 +2,14 @@ package bencode
 
 import (
 	"bytes"
-	"io"
 	"io/ioutil"
 	"strconv"
 )
 
 type Decoder struct {
-	Data interface{}
+	length    int
+	filebytes []byte
+	reader    *bytes.Reader
 }
 
 func NewDecoder(dst string) Decoder {
@@ -18,53 +19,63 @@ func NewDecoder(dst string) Decoder {
 	}
 
 	dec := Decoder{}
-	data := dec.Decode(filebytes, 0)
-	dec.Data = data
+	dec.reader = bytes.NewReader(filebytes)
+	dec.length = len(filebytes)
+	dec.filebytes = filebytes
+
 	return dec
 }
 
-func (dec Decoder) Decode(filebytes []byte, pos int64) interface{}, int {
-	reader := bytes.NewReader(filebytes)
+func (dec Decoder) Decode() interface{} {
 
-	pos, err := reader.Seek(pos, 0)
-	if err != nil {
-		panic(err)
-	}
-	b, _ := reader.ReadByte()
+	b, _ := dec.reader.ReadByte()
+
 	switch b {
-		case 'd':
-		case 'i':
-			i := pos + int64(bytes.IndexByte(filebytes[pos:], 'e'))
-			data, err := strconv.ParseInt(string(filebytes[pos + 1:i]), 10, 64)
-			if err != nil {
-				data, err := strconv.ParseUint(string(filebytes[pos + 1:i]), 10, 64)
-				if err != nil {
-					panic(err)
-				}
-				return data
-			}
-			return data, XXXXX
-		case 'l':
-			data := make([]interface{})
-			next, _ := reader.ReadByte()
-			for next != 'e' {
-				next, _ = reader.ReadByte()
-			}
-		default:
-			i := pos + int64(bytes.IndexByte(filebytes[pos:], ':'))
-			length, err := strconv.ParseInt(string(filebytes[pos:i]), 10, 64)
+	case 'l':
+		next, err := dec.reader.ReadByte()
+		if err != nil {
+			panic(err)
+		}
+		list := []interface{}{}
+		for next != 'e' {
+			dec.reader.UnreadByte()
+			list = append(list, dec.Decode())
+			next, err = dec.reader.ReadByte()
 			if err != nil {
 				panic(err)
 			}
-			pos, err = reader.Seek(i + 1, 0)
+		}
+		return list
+	case 'i':
+		numBytes := dec.readBytesTill('e')
+		data, err := strconv.ParseInt(string(numBytes), 10, 64)
+		if err != nil {
+			data, err := strconv.ParseUint(string(numBytes), 10, 64)
 			if err != nil {
 				panic(err)
 			}
-			stringbytes := make([]byte, length)
-			reader.Read(stringbytes)
-			data := string(stringbytes)
-			return data, pos
-	}
+			return data
+		}
+		return data
+	default:
+		dec.reader.UnreadByte()
+		lengthBytes := dec.readBytesTill(':')
+		length, err := strconv.ParseInt(string(lengthBytes), 10, 64)
+		if err != nil {
+			panic(err)
+		}
 
-	return "null", pos
+		stringbytes := make([]byte, length)
+		dec.reader.Read(stringbytes)
+		data := string(stringbytes)
+		return data
+	}
+}
+
+func (dec Decoder) readBytesTill(delim byte) []byte {
+	i := bytes.IndexByte(dec.filebytes[dec.length-dec.reader.Len():], delim)
+	byteslice := make([]byte, i)
+	dec.reader.Read(byteslice)
+	dec.reader.Seek(1, 1)
+	return byteslice
 }
