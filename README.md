@@ -1,5 +1,5 @@
 # bencode
-Bencoding library for go.
+A bencode library for go.
 
 ## encoding
 ```
