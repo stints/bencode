@@ -31,6 +31,23 @@ func (dec Decoder) Decode() interface{} {
 	b, _ := dec.reader.ReadByte()
 
 	switch b {
+	case 'd':
+		next, err := dec.reader.ReadByte()
+		if err != nil {
+			panic(err)
+		}
+		dict := make(map[interface{}]interface{})
+		for next != 'e' {
+			dec.reader.UnreadByte()
+			key := dec.Decode()
+			val := dec.Decode()
+			dict[key] = val
+			next, err = dec.reader.ReadByte()
+			if err != nil {
+				panic(err)
+			}
+		}
+		return dict
 	case 'l':
 		next, err := dec.reader.ReadByte()
 		if err != nil {
